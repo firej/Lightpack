@@ -49,3 +49,5 @@ Makefile*
 debug/
 release/
 Software/dist_windows/content
+
+.idea
