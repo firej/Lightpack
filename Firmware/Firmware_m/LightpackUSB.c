@@ -27,35 +27,74 @@
 #include "Lightpack.h"
 #include "LightpackUSB.h"
 #include "version.h"
+#include "LedManager.h"
 
 #include "../CommonHeaders/COMMANDS.h"
 #include <LUFA/Drivers/USB/USB.h>
 
 // Buffer to hold the previously generated HID report, for comparison purposes inside the HID class driver.
-uint8_t PrevHIDReportINBuffer[GENERIC_REPORT_SIZE];
-uint8_t PrevUsbLedState;
+//uint8_t PrevHIDReportINBuffer0[GENERIC_EPSIZE];
+//uint8_t PrevHIDReportINBuffer1[GENERIC_EPSIZE];
+//uint8_t PrevHIDReportINBuffer2[GENERIC_EPSIZE];
+//uint8_t PrevUsbLedState;
 
-USB_ClassInfo_HID_Device_t Generic_HID_Interface =
+USB_ClassInfo_HID_Device_t Generic_HID_Interface0 =
 {
         .Config =
         {
                 .InterfaceNumber              = 0,
                 .ReportINEndpoint =
                 {
-                    .Address                  = GENERIC_IN_EPADDR,
+                    .Address                  = GENERIC_IN_EPADDR1,
                     .Size                     = GENERIC_EPSIZE,
                     .Banks                    = 1,
                 },
 
-                .PrevReportINBuffer           = PrevHIDReportINBuffer,
-                .PrevReportINBufferSize       = sizeof(PrevHIDReportINBuffer),
+                .PrevReportINBuffer           = NULL,
+                .PrevReportINBufferSize       = GENERIC_EPSIZE
         },
 };
 
 
+USB_ClassInfo_HID_Device_t Generic_HID_Interface1 =
+{
+        .Config =
+        {
+                .InterfaceNumber              = 1,
+                .ReportINEndpoint =
+                {
+                    .Address                  = GENERIC_IN_EPADDR2,
+                    .Size                     = GENERIC_EPSIZE,
+                    .Banks                    = 1,
+                },
+
+                .PrevReportINBuffer           = NULL,
+                .PrevReportINBufferSize       = GENERIC_EPSIZE
+        },
+};
+
+USB_ClassInfo_HID_Device_t Generic_HID_Interface2 =
+{
+        .Config =
+        {
+                .InterfaceNumber              = 2,
+                .ReportINEndpoint =
+                {
+                    .Address                  = GENERIC_IN_EPADDR3,
+                    .Size                     = GENERIC_EPSIZE,
+                    .Banks                    = 1,
+                },
+
+                .PrevReportINBuffer           = NULL,
+                .PrevReportINBufferSize       = GENERIC_EPSIZE
+        },
+};
+
 void ProcessUsbTasks(void)
 {
-    HID_Device_USBTask(&Generic_HID_Interface);
+    HID_Device_USBTask(&Generic_HID_Interface0);
+    HID_Device_USBTask(&Generic_HID_Interface1);
+    HID_Device_USBTask(&Generic_HID_Interface2);
     USB_USBTask();
 }
 
@@ -74,7 +113,9 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 {
     bool ConfigSuccess = true;
 
-    ConfigSuccess &= HID_Device_ConfigureEndpoints(&Generic_HID_Interface);
+    ConfigSuccess &= HID_Device_ConfigureEndpoints(&Generic_HID_Interface0);
+    ConfigSuccess &= HID_Device_ConfigureEndpoints(&Generic_HID_Interface1);
+    ConfigSuccess &= HID_Device_ConfigureEndpoints(&Generic_HID_Interface2);
 
     USB_Device_EnableSOFEvents();
 }
@@ -82,7 +123,9 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 /** Event handler for the USB device Start Of Frame event. */
 void EVENT_USB_Device_StartOfFrame(void)
 {
-    HID_Device_MillisecondElapsed(&Generic_HID_Interface);
+    HID_Device_MillisecondElapsed(&Generic_HID_Interface0);
+    HID_Device_MillisecondElapsed(&Generic_HID_Interface1);
+    HID_Device_MillisecondElapsed(&Generic_HID_Interface2);
 }
 
 
@@ -115,13 +158,16 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
                                           const void* ReportData,
                                           const uint16_t ReportSize)
 {
-
+    
     SET((D,5));
+
     uint8_t *ReportData_u8 = (uint8_t *)ReportData;
 
     uint8_t cmd = ReportData_u8[0]; //[0]; // command from enum COMMANDS{ ... };
 
-    Images_t* g_Images = &(g_ImagesEx[0]);
+    Images_t* g_Images1 = &g_ImagesEx1[HIDInterfaceInfo->Config.InterfaceNumber];
+    Images_t2* g_Images2 = &g_ImagesEx2[HIDInterfaceInfo->Config.InterfaceNumber];
+    //Images_t* g_Images = &(g_ImagesEx[0]);
 
     switch (cmd)
     {
@@ -135,21 +181,21 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
 
         if ( LEDManager_acceptsUpdates() )
         {
-            for (uint8_t i = 0; i < LEDS_COUNT; i++)
-            {
+			for (uint8_t i = 0; i < LEDS_COUNT; i++)
+			{
 
-                g_Images->start[i].r = g_Images->current[i].r;
-                g_Images->start[i].g = g_Images->current[i].g;
-                g_Images->start[i].b = g_Images->current[i].b;
+				g_Images1->start[i].r = g_Images2->current[i].r;
+				g_Images1->start[i].g = g_Images2->current[i].g;
+				g_Images1->start[i].b = g_Images2->current[i].b;
 
-                g_Images->end[i].r = ReportData_u8[reportDataIndex++];
-                g_Images->end[i].g = ReportData_u8[reportDataIndex++];
-                g_Images->end[i].b = ReportData_u8[reportDataIndex++];
+				g_Images1->end[i].r = ReportData_u8[reportDataIndex++];
+				g_Images1->end[i].g = ReportData_u8[reportDataIndex++];
+				g_Images1->end[i].b = ReportData_u8[reportDataIndex++];
 
-                reportDataIndex+=3;
-            }
-            g_smoothIndex = 0;
+				reportDataIndex+=3;
+			}
         }
+        g_smoothIndex[HIDInterfaceInfo->Config.InterfaceNumber] = 0;
 
         _FlagClear(Flag_ChangingColors);
         _FlagSet(Flag_HaveNewColors);
@@ -164,8 +210,10 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
 
     case CMD_SET_TIMER_OPTIONS:
 
+    	/*
         g_Settings.timerOutputCompareRegValue =
-                ((uint16_t)ReportData_u8[2] << 8) | ReportData_u8[1];
+                (((uint16_t)ReportData_u8[2] << 8) | ReportData_u8[1]);
+        */
 
         _FlagSet(Flag_TimerOptionsChanged);
 
@@ -173,20 +221,20 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
 
     case CMD_SET_PWM_LEVEL_MAX_VALUE:
 
-        g_Settings.maxPwmValue = ReportData_u8[1];
+        //g_Settings.maxPwmValue = ReportData_u8[1];
 
         break;
 
     case CMD_SET_SMOOTH_SLOWDOWN:
 
-        g_Settings.isSmoothEnabled = ReportData_u8[1];
-        g_Settings.smoothSlowdown  = ReportData_u8[1]; /* not a bug */
+        //g_Settings.isSmoothEnabled = ReportData_u8[1];
+        g_Settings.smoothSlowdown  = ReportData_u8[1]/4; /* not a bug */
 
         break;
 
     case CMD_SET_BRIGHTNESS:
 
-        g_Settings.brightness = ReportData_u8[1];
+        //g_Settings.brightness = ReportData_u8[1];
 
         break;
 
@@ -195,9 +243,12 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
 
     }
     CLR((D,5));
+
 }
 
 void EVENT_USB_Device_ControlRequest(void)
 {
-    HID_Device_ProcessControlRequest(&Generic_HID_Interface);
+	HID_Device_ProcessControlRequest(&Generic_HID_Interface0);
+	HID_Device_ProcessControlRequest(&Generic_HID_Interface1);
+	HID_Device_ProcessControlRequest(&Generic_HID_Interface2);
 }

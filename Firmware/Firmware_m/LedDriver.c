@@ -40,6 +40,16 @@ RGB_t1 resampled[TOTALRZONES];
 #endif
 
 
+#if (LIGHTPACK_HW >= 6)
+
+/*
+ *  Hardware 6.x
+ */
+
+//#define LATCH_PIN   (B, 0)
+//#define SCK_PIN     (B, 1)
+//#define MOSI_PIN    (B, 2)
+
 static const uint8_t LedsNumberForOneDriver = 5;
 
 /*
@@ -97,15 +107,15 @@ void resample( uint8_t lz1, uint8_t lz2, uint8_t rz1, uint8_t rz2 )
 	}
 
 	uint8_t c1 = lz2 - lz1;
-	uint8_t c2 = rz2 - rz1 + (uint8_t)1;
+	uint8_t c2 = rz2 - rz1 + 1;
 
-	uint8_t rd = (uint8_t)((((uint16_t)c1) << 8) / c2);
+	uint8_t rd = (((uint16_t)c1) << 8) / c2;
 
 	uint16_t ri = rd >> 1;  //middle of strip zone
 	//li1 + ri >> 8 - lightpack zone index where middle of strip zone is,
 	//ri & 0xff - position inside that lightpack zone 0..255
 
-	RGB_t1* a = (RGB_t1*)&g_ImagesEx2;
+	RGB_t1* a = (RGB_t1*)g_ImagesEx2;
 
 	const uint8_t* gt = LEDManager_getCurrentGammaTable();
 
@@ -114,12 +124,12 @@ void resample( uint8_t lz1, uint8_t lz2, uint8_t rz1, uint8_t rz2 )
 		//take  ( ri & 0xff ) from (li1 + ri>>8 + 1) zone,
 		//the rest from (li1 + ri>>8)  zone
 
-		uint8_t t = (uint8_t)(ri & 0xff);
-		uint8_t t1 = (uint8_t)(256 - t);  //not a bug. Due to nature of algorithm, t1 is never =256.
+		uint8_t t = ri & 0xff;
+		uint8_t t1 = 256 - t;  //not a bug. Due to nature of algorithm, t1 is never =256.
 
-		uint8_t li1 = (uint8_t)((ri >> 8) + lz1);
+		uint8_t li1 = ( ri >> 8 ) + lz1;
 
-		uint8_t li2 = li1 + (uint8_t)1;
+		uint8_t li2 = li1 + 1;
 		if ( li2 > ( LIGHTPACKS_COUNT * 10 ) )
 		{
 			li2 -= LIGHTPACKS_COUNT * 10;
@@ -256,8 +266,107 @@ void LedDriver_OffLeds(void)
     */
 }
 
+#elif (LIGHTPACK_HW == 5)
 
-#if (LIGHTPACK_HW == 4)
+/*
+ *  Hardware 5.x
+ */
+
+#define LATCH_PIN   (B, 0)
+#define SCK_PIN     (B, 1)
+#define MOSI_PIN    (B, 2)
+
+static const uint8_t LedsNumberForOneDriver = 5;
+
+static inline void _SPI_Write8(const uint8_t byte)
+{
+    SPDR = byte;
+    while ((SPSR & (1 << SPIF)) == false) { }
+}
+
+static inline void _SPI_Write16(const uint16_t word)
+{
+    _SPI_Write8((word >> 8) & 0xff);
+    _SPI_Write8(word & 0xff);
+}
+
+static inline void _LedDriver_LatchPulse(void)
+{
+    SET(LATCH_PIN);
+    CLR(LATCH_PIN);
+}
+
+static inline void _LedDriver_UpdateLedsPWM(
+        const uint8_t startIndex, const uint8_t endIndex,
+        const RGB_t imageFrame[LEDS_COUNT],
+        const uint8_t pwmIndex )
+{
+    uint16_t sendme = 0x0000;
+    uint16_t bit  = 1;
+
+    for (uint8_t i = startIndex; i < endIndex; i++)
+    {
+        if (imageFrame[i].r > pwmIndex)
+            sendme |= bit;
+        bit <<= 1;
+
+        if (imageFrame[i].g > pwmIndex)
+            sendme |= bit;
+        bit <<= 1;
+
+        if (imageFrame[i].b > pwmIndex)
+            sendme |= bit;
+        bit <<= 1;
+    }
+
+    _SPI_Write16(sendme);
+}
+
+void LedDriver_Init(void)
+{
+    OUTPUT(SCK_PIN);
+    OUTPUT(MOSI_PIN);
+    OUTPUT(LATCH_PIN);
+
+    CLR(LATCH_PIN);
+
+    // Setup SPI Master with max SPI clock speed (F_CPU / 2)
+    SPSR = (1 << SPI2X);
+    SPCR = (1 << SPE) | (1 << MSTR);
+
+    LedDriver_OffLeds();
+}
+
+void LedDriver_UpdatePWM(const RGB_t imageFrame[LEDS_COUNT], const uint8_t pwmIndex)
+{
+    // ...
+    // LedDriver2
+    //      10     9     8     7     6
+    // 0 B G R B G R B G R B G R B G R
+    // LedDriver1
+    //       5     4     3     2     1
+    // 0 B G R B G R B G R B G R B G R
+
+    //    for (int8_t i = LEDS_COUNT - LedsNumberForOneDriver; i >= 0; i -= LedsNumberForOneDriver)
+    //    {
+    //        _LedDriver_UpdateLeds(i, i + LedsNumberForOneDriver,
+    //                LevelsForPWM, pwmIndex);
+    //    }
+
+    _LedDriver_UpdateLedsPWM(LedsNumberForOneDriver, LEDS_COUNT, imageFrame, pwmIndex);
+    _LedDriver_UpdateLedsPWM(0, LedsNumberForOneDriver, imageFrame, pwmIndex);
+
+    _LedDriver_LatchPulse();
+}
+
+void LedDriver_OffLeds(void)
+{
+    _SPI_Write16(0x0000);
+    _SPI_Write16(0x0000);
+    _LedDriver_LatchPulse();
+}
+
+#elif (LIGHTPACK_HW == 4)
 
 /*
  *  Hardware 4.x
@@ -370,6 +479,6 @@ void LedDriver_OffLeds(void)
 }
 
 #else
-#	error "LIGHTPACK_HW must be passed thru command line as major number of the hardware revision"
+#	error "LIGHTPACK_HW must be defined in '../CommonHeaders/LIGHTPACK_HW.h' to major number of the hardware revision"
 #endif /* (LIGHTPACK_HW switch) */
 

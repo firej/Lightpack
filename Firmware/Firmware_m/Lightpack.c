@@ -33,37 +33,43 @@
 
 volatile uint8_t g_Flags = 0;
 
-//Images_t g_Images = { };
-Images_t g_ImagesEx1;
-Images_t2 g_ImagesEx2;
 
-uint8_t g_smoothIndex;
+Images_t g_ImagesEx1[LIGHTPACKS_COUNT];
+Images_t2 g_ImagesEx2[LIGHTPACKS_COUNT];
+
+uint8_t g_smoothIndex[LIGHTPACKS_COUNT];
 
 Settings_t g_Settings =
 {
-        .isSmoothEnabled = true,
+        //.isSmoothEnabled = true,
 
         // Number of intermediate colors between old and new
-        .smoothSlowdown = 100,
+        .smoothSlowdown = 100/4,
 
-        .brightness = 50,
+        //.brightness = 50,
 
         // Maximum number of different colors for each channel (Red, Green and Blue)
-        .maxPwmValue = 128,
+        //.maxPwmValue = 128,
 
         // Timer OCR value
-        .timerOutputCompareRegValue = 100,
+        //.timerOutputCompareRegValue = 20000,
+        //2000//with div8 it's 100Hz update
 };
 
 /*
  *  Interrupts of the timer that generates PWM
  */
 
-//ignore exthw on/off and 12V on/of until!=0
+//incremented with 100hz
+//volatile uint16_t s_timer100;
+
+//ifnore exthw on/off and 12V on/of until!=0
 //decremented with 100hz
 volatile uint8_t s_switchIgnore = 0;
 
 
+//===========================================
+//===========================================
 ISR( TIMER1_COMPA_vect )
 {
     SET((D,6));
@@ -71,7 +77,7 @@ ISR( TIMER1_COMPA_vect )
 
     if ( s_switchIgnore )
     {
-        s_switchIgnore--;
+    	s_switchIgnore--;
     }
 
     TCNT1 = 0x0000;
@@ -84,11 +90,15 @@ ISR( TIMER1_COMPA_vect )
     CLR((D,6));
 }
 
+//=======================================
+//=======================================
 ISR( INT1_vect )
 {
-    LedManager_Beat();
+	LedManager_Beat();
 }
 
+//=======================================
+//=======================================
 // Watchdog interrupt
 ISR ( WDT_vect )
 {
@@ -96,6 +106,22 @@ ISR ( WDT_vect )
     for(;;);
 }
 
+/*
+//=======================================
+//=======================================
+uint16_t getTimer100(void )
+{
+	uint16_t res;
+	asm ("cli");
+	res = s_timer100;
+	asm ("sei");
+
+	return res;
+}
+*/
+
+//=======================================
+//=======================================
 static inline void Timer_Init(void)
 {
     TCCR1A = 0x00;
@@ -105,40 +131,85 @@ static inline void Timer_Init(void)
 //    TCCR0B = 0x00;
 
     // Setup default value
-    OCR1A = g_Settings.timerOutputCompareRegValue;
+ //   OCR1A = g_Settings.timerOutputCompareRegValue;
+      OCR1A = 20000;
 
     TIMSK1 = _BV(OCIE1A); // Main timer
 //    TIMSK0 = _BV(TOIE0); // Usb led timer
 
     // Start timer
-    TCCR1B = _BV(CS10); // div1
-//    TCCR0B = _BV(CS02); // div by 8
+    //TCCR1B = _BV(CS10); // div1
+    TCCR1B = _BV(CS11); // div8
+
+
+    //    TCCR0B = _BV(CS02); // div by 8
 
     TCNT1 = 0x0000;
 //    TCNT0 = 0x0000;
+
+
 }
 
+//=======================================
+//=======================================
 static inline void SetupHardware(void)
 {
     /* Disable clock division */
     clock_prescale_set(clock_div_1);
 
     /* Hardware Initialization */
-    DDRB  = 0b11111000;
+    DDRB  = 0b11101111;
     PORTB = 0b00000000;
 
     DDRC  = 0b11111100;
     PORTC = 0b00000000;
 
-    DDRD  = 0b11111111;
-    PORTD = 0b00000000;
+    DDRD  = 0b11101000;
+    PORTD = 0b00000101;
 
-    OUTPUT(USBLED);
-    CLR(USBLED);
+    //D0 - setup button
+    //D2 - RXD1
+
+//    OUTPUT(USBLED);
+//    CLR(USBLED);
 
 //    set_sleep_mode(SLEEP_MODE_IDLE);
+
+    // External Interrupt(s) initialization
+    // INT0: Off
+    // INT1: On
+    // INT1 Mode: Rising Edge
+    // INT2: Off
+    // INT3: Off
+    // INT4: Off
+    // INT5: Off
+    // INT6: Off
+    // INT7: Off
+    EICRA=0x0C;
+    EICRB=0x00;
+    EIMSK=0x02;
+    EIFR=0x02;
+    // PCINT0 interrupt: Off
+    // PCINT1 interrupt: Off
+    // PCINT2 interrupt: Off
+    // PCINT3 interrupt: Off
+    // PCINT4 interrupt: Off
+    // PCINT5 interrupt: Off
+    // PCINT6 interrupt: Off
+    // PCINT7 interrupt: Off
+    PCMSK0=0x00;
+    // PCINT8 interrupt: Off
+    // PCINT9 interrupt: Off
+    // PCINT10 interrupt: Off
+    // PCINT11 interrupt: Off
+    // PCINT12 interrupt: Off
+    PCMSK1=0x00;
+    PCICR=0x00;
+
 }
 
+//=======================================
+//=======================================
 static inline void enableWatchdog(void)
 {
     wdt_reset();
@@ -148,13 +219,17 @@ static inline void enableWatchdog(void)
     WDTCSR |= _BV(WDIE);
 }
 
+//=======================================
+//=======================================
 static inline void _ProcessFlags(void)
 {
     /* if (_FlagProcess(Flag_HaveNewColors)) */
 
-    if (USB_DeviceState!=DEVICE_STATE_Configured || _FlagProcess(Flag_LedsOffAll))
+    if (_FlagProcess(Flag_LedsOffAll))
         LedManager_FillImages(0, 0, 0);
 
+
+    /*
     if (_FlagProcess(Flag_TimerOptionsChanged))
     {
         // Pause timer
@@ -166,17 +241,68 @@ static inline void _ProcessFlags(void)
         TCNT1 = 0x0000;
         TIMSK1 = _BV(OCIE1A);
     }
+    */
 }
 
+//=======================================
+//=======================================
+void switchOnOff(void )
+{
+	if ( s_switchIgnore )
+	{
+		return;
+	}
+
+	s_switchIgnore = ON_OFF_IGNORE_PERIOD;
+
+	if ( ISSET((B,1)) )
+	{
+		CLR((B,1));
+	}
+	else
+	{
+		SET((B,1));
+	}
+}
+
+//=======================================
+//=======================================
+void switchExtOnOff(void)
+{
+	if ( s_switchIgnore )
+	{
+		return;
+	}
+
+	s_switchIgnore = ON_OFF_IGNORE_PERIOD;
+
+	if ( ISSET((B,2)) )
+	{
+		CLR((B,2));
+	}
+	else
+	{
+		SET((B,2));
+	}
+}
+
+//=======================================
+//=======================================
+uint8_t getSwitchIgnored(void)
+{
+	return s_switchIgnore;
+}
+
+//=======================================
+//=======================================
 /*
  *  Main program entry point
  */
-int main(void)
+__attribute__((OS_main)) int main(void)
 {
     enableWatchdog();
     SetupHardware();
     _WaveSwitchOnUsbLed(100, 100);
-
     // Led driver ports initialization
     LedDriver_Init();
 
@@ -188,16 +314,24 @@ int main(void)
 
     sei();
 
-#ifdef ENCLOSURE_LED_OFF
-    CLR(USBLED);
-#endif
-
     for (;;)
     {
+        //SET((D,4));
+        //CLR((D,4));
+
         wdt_reset();
         ProcessUsbTasks();
         _ProcessFlags();
 //	sleep_mode();
+        EvalCurrentImage_SmoothlyAlgIteration();
+
+
+        if ( !TST((D,0)) )
+        {
+            TIMSK1 &= (uint8_t)~_BV(OCIE1A);
+            TIMSK1 = _BV(OCIE1A);
+        }
+
     }
 
     // Avoid annoying warning

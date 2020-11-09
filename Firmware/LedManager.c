@@ -20,9 +20,13 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+#include <avr/wdt.h>
+#include <stdlib.h>
+#include <avr/eeprom.h>
 
 #include "Lightpack.h"
 #include "LedDriver.h"
+#include "LedManager.h"
 
 void LedManager_FillImages(const uint8_t red, const uint8_t green, const uint8_t blue)
 {
@@ -57,11 +61,11 @@ void EvalCurrentImage_SmoothlyAlg(void)
 
         } else {
             uint32_t coefEnd = ((uint32_t)g_Images.smoothIndex[i] << 16) / g_Settings.smoothSlowdown;
-            uint32_t coefStart = (1UL << 16) - coefEnd;
+            uint32_t coefStart = (uint32_t)((1UL << 16) - coefEnd);
 
-            g_Images.current[i].r = (
+            g_Images.current[i].r = (uint8_t)((
                     coefStart * g_Images.start[i].r +
-                    coefEnd   * g_Images.end  [i].r) >> 16;
+                    coefEnd   * g_Images.end  [i].r) >> 16);
 
             g_Images.current[i].g = (
                     coefStart * g_Images.start[i].g +
@@ -174,3 +178,13 @@ void LedManager_UpdateColors(void)
 }
 
 #endif
+
+void LedManager_LitLeds( uint8_t count )
+{
+	LedDriver_LitLeds( count );
+}
+
+bool LEDManager_acceptsUpdates(void)
+{
+	return ( s_mode == LMMODE_HOST) && ( getSwitchIgnored() == 0 );
+}

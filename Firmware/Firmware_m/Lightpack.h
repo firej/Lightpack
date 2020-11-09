@@ -48,74 +48,79 @@
 
 #include "../CommonHeaders/LEDS_COUNT.h"
 
+#define ON_OFF_IGNORE_PERIOD  100
+
 /* LED use with I/O manipulations macroses from iodefs.h */
 #define PINRX   (D,2)
 #define PINTX   (D,3)
 
 #if(LIGHTPACK_HW == 7)
-//    #define USBLED  (D,4)
+    //#define USBLED  (D,4)
 #else
-//    #define USBLED  (C,5)
+    //#define USBLED  (C,5)
 #endif
 
 // Global variables
 extern Settings_t g_Settings;
- extern Images_t g_Images;
-//extern Images_t g_ImagesEx1;
-//extern Images_t2 g_ImagesEx2;
-extern uint8_t g_smoothIndex;
+extern Images_t g_ImagesEx1[LIGHTPACKS_COUNT];
+extern Images_t2 g_ImagesEx2[LIGHTPACKS_COUNT];
+extern uint8_t g_smoothIndex[LIGHTPACKS_COUNT];
 
 extern uint8_t getSwitchIgnored(void);
 
 static inline void _BlinkUsbLed(const uint8_t times, const uint8_t ms)
 {
-//    for (uint8_t t = 0; t < times; t++)
-//    {
-//        SET(USBLED);
-//        for (uint8_t i = 0; i < ms; i++)
-//            _delay_ms(1);
-//
-//        CLR(USBLED);
-//        for (uint8_t i = 0; i < ms; i++)
-//            _delay_ms(1);
-//    }
-//    SET(USBLED);
+	/*
+    for (uint8_t t = 0; t < times; t++)
+    {
+        SET(USBLED);
+        for (uint8_t i = 0; i < ms; i++)
+            _delay_ms(1);
+
+        CLR(USBLED);
+        for (uint8_t i = 0; i < ms; i++)
+            _delay_ms(1);
+    }
+    SET(USBLED);
+    */
 }
 
 static inline void _WaveSwitchOnUsbLed(const uint8_t num, const uint8_t target)
 {
-//    for (uint8_t pwm = 0; pwm < num; pwm++)
-//    {
-//        CLR(USBLED);
-//        for (uint8_t i = 0; i < num - pwm; i++)
-//        {
-//            _delay_us(50);
-//            wdt_reset();
-//        }
-//
-//        SET(USBLED);
-//        for (uint8_t i = 0; i < pwm; i++)
-//        {
-//            _delay_us(50);
-//            wdt_reset();
-//        }
-//    }
-//    for (uint8_t pwm = 0; pwm < num - target; pwm++)
-//    {
-//        CLR(USBLED);
-//        for (uint8_t i = 0; i < pwm; i++)
-//        {
-//            _delay_us(50);
-//            wdt_reset();
-//        }
-//
-//        SET(USBLED);
-//        for (uint8_t i = 0; i < num - pwm; i++)
-//        {
-//            _delay_us(50);
-//            wdt_reset();
-//        }
-//    }
+	/*
+    for (uint8_t pwm = 0; pwm < num; pwm++)
+    {
+        CLR(USBLED);
+        for (uint8_t i = 0; i < num - pwm; i++)
+        {
+            _delay_us(50);
+            wdt_reset();
+        }
+
+        SET(USBLED);
+        for (uint8_t i = 0; i < pwm; i++)
+        {
+            _delay_us(50);
+            wdt_reset();
+        }
+    }
+    for (uint8_t pwm = 0; pwm < num - target; pwm++)
+    {
+        CLR(USBLED);
+        for (uint8_t i = 0; i < pwm; i++)
+        {
+            _delay_us(50);
+            wdt_reset();
+        }
+
+        SET(USBLED);
+        for (uint8_t i = 0; i < num - pwm; i++)
+        {
+            _delay_us(50);
+            wdt_reset();
+        }
+    }
+    */
 }
 
 #endif /* LIGHTPACK_H_INCLUDED */

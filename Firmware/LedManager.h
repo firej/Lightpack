@@ -23,9 +23,11 @@
 
 #ifndef LEDMANAGER_H_INCLUDED
 #define LEDMANAGER_H_INCLUDED
+#include <stdlib.h>
 
 extern void LedManager_UpdateColors(void);
 extern void LedManager_FillImages(const uint8_t red, const uint8_t green, const uint8_t blue);
+extern bool LEDManager_acceptsUpdates(void);
 
 #endif /* LEDMANAGER_H_INCLUDED */
 

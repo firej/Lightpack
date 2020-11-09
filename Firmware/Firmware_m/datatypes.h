@@ -78,6 +78,15 @@
 
 #define TOTALRZONES ( RZ_LEFT + RZ_RIGHT + RZ_TOP + RZ_BOTTOM )
 
+#if (LIGHTPACK_HW >= 6)
+typedef struct
+{
+    uint8_t r;
+    uint8_t b;
+    uint8_t g;
+
+} RGB_t;
+#else /*(LIGHTPACK_HW >= 6)*/
 typedef struct
 {
     uint8_t r;
@@ -85,6 +94,7 @@ typedef struct
     uint8_t b;
 
 } RGB_t;
+#endif
 
 typedef struct
 {
@@ -101,11 +111,11 @@ typedef struct
 
 typedef struct
 {
-    uint8_t isSmoothEnabled;
+    //uint8_t isSmoothEnabled;
     uint8_t smoothSlowdown;
-    uint8_t brightness;
-    uint8_t maxPwmValue;
-    uint16_t timerOutputCompareRegValue;
+    //uint8_t brightness;
+    //uint8_t maxPwmValue;
+    //uint16_t timerOutputCompareRegValue;
 
 } Settings_t;
 
